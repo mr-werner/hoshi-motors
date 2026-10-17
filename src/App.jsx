@@ -1,385 +1,267 @@
-import blueprintLogo from "./assets/blueprint-webstudio-logo.png";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, ArrowUpRight, BadgeCheck, CheckCircle2, Clock, MapPin, Menu, Minus, Phone, Plus, X } from "lucide-react";
-import SITE from "./site.js";
+import React, { useEffect, useState } from "react";
+import {
+  ArrowRight, ArrowUpRight, Battery, CalendarCheck, CheckCircle2, Clock, Cog, Disc3, Droplets, Gauge, Mail, MapPin,
+  Menu, Phone, Search, Thermometer, X,
+} from "lucide-react";
+import { ConceptWidget, StudioCredit } from "./concept.jsx";
 
 // -----------------------------------------------------------------------------
-// All business content lives in src/site.js. This file only lays it out.
+// CONTENT. Facts come from Hoshi Motors' current site (hoshimotors.net),
+// checked 2026-10-17. That site is one short page with no logo or photos, so
+// the crest and star motif here are drawn from the name: hoshi means "star".
 // -----------------------------------------------------------------------------
 
-const { COMPANY, PHONE, PHONE_DISPLAY, EMAIL, ADDRESS, CITY, MAPS_QUERY, FOUNDED, FALLBACK_RATING } = SITE;
-const GOOGLE_REVIEWS_URL = SITE.GOOGLE_PLACE_ID
-  ? `https://search.google.com/local/reviews?placeid=${SITE.GOOGLE_PLACE_ID}`
-  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(MAPS_QUERY)}`;
-const GOOGLE_WRITE_REVIEW_URL = SITE.GOOGLE_PLACE_ID ? `https://search.google.com/local/writereview?placeid=${SITE.GOOGLE_PLACE_ID}` : null;
+const COMPANY = "Hoshi Motors";
+const ABBR = "hm";
+const PHONE = "3034496632";
+const PHONE_DISPLAY = "(303) 449-6632";
+const EMAIL = "star@hoshimotors.net";
+const ADDRESS = "2907 55th St, Unit 1";
+const CITY = "Boulder, CO 80301";
+const MAPS_QUERY = "Hoshi Motors, 2907 55th St Unit 1, Boulder, CO 80301";
+const GOOGLE_URL = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(MAPS_QUERY)}`;
+const END_DATE = "2026-11-24T23:59:59-07:00";
 
-// Public contact details for the studio — edit here, no environment variables required.
-const STUDIO_PHONE = "+17205156647";
-const STUDIO_EMAIL = "hello@blueprintwebstudio.com";
-const STUDIO_WEBSITE = "https://blueprintwebstudio.com";
-const STUDIO_SOURCE = `${SITE.ABBR}.blueprintwebstudio.com`;
+const HOURS = [
+  ["Monday – Friday", "7:30 am – 5:00 pm"],
+  ["Saturday & Sunday", "Closed"],
+];
 
-const END_DATE = import.meta.env.VITE_CONCEPT_END_DATE || SITE.END_DATE;
+// The four makes named on the current site, placed as a constellation.
+const MAKES = [
+  { name: "Honda", x: 18, y: 30, line: "Everyday Civics, Accords, CR-Vs and Pilots, kept on schedule." },
+  { name: "Acura", x: 46, y: 16, line: "The same engineering as Honda, with the premium details looked after." },
+  { name: "Toyota", x: 74, y: 40, line: "Corollas to Tacomas, built to last and maintained to match." },
+  { name: "Subaru", x: 40, y: 62, line: "Colorado's all-wheel drive. Its name is the Japanese word for the Pleiades." },
+];
 
-function Title({ parts }) {
-  const [plain, em] = parts;
-  return <>{plain}{em && <em>{em}</em>}</>;
-}
+const SERVICES = [
+  { title: "Scheduled maintenance", desc: "Factory-interval service so nothing sneaks up on you.", icon: CalendarCheck },
+  { title: "Diagnostics", desc: "Check-engine lights and odd noises traced to the real cause.", icon: Search },
+  { title: "Brakes", desc: "Pads, rotors, calipers and fluid.", icon: Disc3 },
+  { title: "Engine & timing", desc: "Timing belts, gaskets and engine repair.", icon: Cog },
+  { title: "Oil & fluids", desc: "Oil, coolant, transmission and brake fluid service.", icon: Droplets },
+  { title: "Heating & A/C", desc: "Climate control diagnosis and repair.", icon: Thermometer },
+  { title: "Electrical & battery", desc: "Batteries, starters, alternators and wiring.", icon: Battery },
+  { title: "Suspension & steering", desc: "Struts, shocks, CV axles and steering parts.", icon: Gauge },
+];
+const NUMERALS = ["一", "二", "三", "四", "五", "六", "七", "八"];
+const SERVICE_OPTIONS = ["Not sure / diagnosis", ...SERVICES.map((s) => s.title)];
+
+// Illustrates the "honest estimates so you can plan for repairs" promise. Sample items only.
+const PLAN = [
+  { when: "Now", kanji: "今", note: "Safety items and anything that will cause damage if it waits.", items: ["Front brake pads at 2 mm", "Coolant leak at the water pump"] },
+  { when: "Soon", kanji: "次", note: "Worth budgeting for in the next few months.", items: ["Rear tires near the wear bars", "Timing belt due at 105k"] },
+  { when: "Later", kanji: "後", note: "On the horizon. We'll remind you when it's time.", items: ["Spark plugs at the next interval", "Struts showing early wear"] },
+];
+
+const NAV = [["Makes", "#makes"], ["Plan ahead", "#plan"], ["Services", "#services"], ["Visit", "#visit"]];
 
 // -----------------------------------------------------------------------------
-// CONCEPT COUNTDOWN + INTEREST FORM (Blueprint WebStudio)
+// MOTIFS
 // -----------------------------------------------------------------------------
 
-function getRemaining() {
-  const ms = Math.max(0, new Date(END_DATE).getTime() - Date.now());
-  return {
-    days: Math.floor(ms / 86400000),
-    hours: Math.floor(ms / 3600000) % 24,
-    minutes: Math.floor(ms / 60000) % 60,
-    expired: ms === 0,
-  };
-}
+const STAR = "M50 6l12.9 30.6 33.1 2.7-25.2 21.7 7.7 32.4L50 76.2 21.5 93.4l7.7-32.4L4 39.3l33.1-2.7z";
 
-function ConceptInterestModal({ onClose }) {
-  const [form, setForm] = useState({ name: "", email: "", phone: "", budget: "", message: "", website: "" });
-  const [status, setStatus] = useState("idle");
-  const [error, setError] = useState("");
-  const modalRef = useRef(null);
-
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const previousFocus = document.activeElement;
-    modalRef.current?.focus();
-    const handleEscape = (event) => { if (event.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleEscape);
-      previousFocus?.focus?.();
-    };
-  }, [onClose]);
-
-  function update(field, value) { setForm((prev) => ({ ...prev, [field]: value })); }
-
-  async function submit(event) {
-    event.preventDefault();
-    if (status === "sending") return;
-    if (form.website) { setStatus("sent"); return; }
-    setStatus("sending");
-    setError("");
-    try {
-      const response = await fetch("/api/demo-interest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prospect: COMPANY,
-          source: STUDIO_SOURCE,
-          page: window.location.href,
-          action: "Partner Program Interest",
-          name: form.name.trim(),
-          email: form.email.trim(),
-          phone: form.phone.trim(),
-          budget: form.budget,
-          message: form.message.trim(),
-        }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.success) throw new Error(result.message || "Unable to send your message.");
-      setStatus("sent");
-    } catch (err) {
-      setStatus("error");
-      setError(err.message || "Please try again.");
-    }
-  }
-
+function Crest({ size = 52, className = "" }) {
   return (
-    <div className="interest-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <section className="interest-modal" role="dialog" aria-modal="true" aria-labelledby="interest-title" ref={modalRef} tabIndex={-1}>
-        <button type="button" className="interest-close" onClick={onClose} aria-label="Close interest form"><X size={24} /></button>
-        <span className="interest-kicker">BLUEPRINT WEBSTUDIO PARTNER PROGRAM</span>
-        {status === "sent" ? (
-          <div className="interest-success">
-            <CheckCircle2 size={44} />
-            <h2 id="interest-title">Thank you for your interest.</h2>
-            <p>Your message has been sent to Blueprint WebStudio. We'll follow up using the contact information you provided.</p>
-            <button type="button" className="interest-submit" onClick={onClose}>Close</button>
-          </div>
-        ) : (
-          <>
-            <h2 id="interest-title">Interested in this redesign?</h2>
-            <p className="interest-intro">Send a quick note and Blueprint WebStudio will follow up about launching, customizing, or taking over the site.</p>
-            <form onSubmit={submit} className="interest-form">
-              <label>Name <span>*</span><input value={form.name} onChange={(e) => update("name", e.target.value)} required maxLength={120} autoComplete="name" /></label>
-              <label>Email <span>*</span><input type="email" value={form.email} onChange={(e) => update("email", e.target.value)} required maxLength={254} autoComplete="email" /></label>
-              <label>Phone<input type="tel" value={form.phone} onChange={(e) => update("phone", e.target.value)} maxLength={40} autoComplete="tel" /></label>
-              <label>Budget <span>*</span>
-                <select value={form.budget} onChange={(e) => update("budget", e.target.value)} required>
-                  <option value="">Select a range...</option>
-                  <option value="Under $1,000">Under $1,000</option>
-                  <option value="$1,000–$2,500">$1,000–$2,500</option>
-                  <option value="$2,500–$5,000">$2,500–$5,000</option>
-                  <option value="$5,000–$10,000">$5,000–$10,000</option>
-                  <option value="$10,000+">$10,000+</option>
-                  <option value="Not sure yet">Not sure yet</option>
-                </select>
-              </label>
-              <label>Message <small>(optional)</small><textarea value={form.message} onChange={(e) => update("message", e.target.value)} maxLength={3000} rows={4} placeholder="Questions, ideas, or anything you'd like us to know..." /></label>
-              <div className="interest-honeypot" aria-hidden="true"><label>Website<input type="text" tabIndex={-1} autoComplete="off" value={form.website} onChange={(e) => update("website", e.target.value)} /></label></div>
-              {error && <p className="interest-error" role="alert">{error}</p>}
-              <button type="submit" className="interest-submit" disabled={status === "sending"}>{status === "sending" ? "Sending..." : "Send My Interest"}</button>
-              <p className="interest-privacy">Your inquiry goes directly to Blueprint WebStudio, not {COMPANY}.</p>
-            </form>
-          </>
-        )}
-      </section>
+    <svg className={`crest ${className}`} width={size} height={size} viewBox="0 0 120 120" aria-hidden="true">
+      <circle cx="60" cy="60" r="56" fill="var(--ai)" />
+      <circle cx="60" cy="60" r="49" fill="none" stroke="var(--kin)" strokeWidth="3" />
+      <circle cx="60" cy="60" r="43" fill="none" stroke="var(--kin)" strokeWidth="1" strokeDasharray="2 5" />
+      <g transform="translate(22 21) scale(.76)"><path d={STAR} fill="var(--shu)" /></g>
+    </svg>
+  );
+}
+
+function Seal({ children = "星", className = "" }) {
+  return <span className={`seal ${className}`} aria-hidden="true">{children}</span>;
+}
+
+function Seigaiha({ id }) {
+  return (
+    <svg className="seigaiha" aria-hidden="true">
+      <defs>
+        <pattern id={id} width="56" height="28" patternUnits="userSpaceOnUse">
+          {[[0, 0], [56, 0], [28, 14], [0, 28], [56, 28]].map(([cx, cy]) => (
+            <g key={`${cx}-${cy}`}>
+              {[27, 21, 15, 9].map((r) => <circle key={r} cx={cx} cy={cy} r={r} fill="var(--wave-bg)" stroke="currentColor" strokeWidth="1.4" />)}
+            </g>
+          ))}
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill={`url(#${id})`} />
+    </svg>
+  );
+}
+
+function Constellation() {
+  const pairs = [[0, 1], [1, 2], [0, 3], [3, 2]];
+  const pleiades = [[20, 70], [23, 73], [18, 75], [25, 68], [21, 78], [16, 71]];
+  return (
+    <div className="sky">
+      <Seigaiha id="sky-waves" />
+      <svg className="sky-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        {pairs.map(([a, b]) => <line key={`${a}${b}`} x1={MAKES[a].x} y1={MAKES[a].y} x2={MAKES[b].x} y2={MAKES[b].y} />)}
+      </svg>
+      {pleiades.map(([x, y], i) => <i key={i} className="dust" style={{ left: `${x}%`, top: `${y}%`, animationDelay: `${i * .4}s` }} />)}
+      {MAKES.map((m, i) => (
+        <a key={m.name} href="#makes" className="sky-star" style={{ left: `${m.x}%`, top: `${m.y}%`, animationDelay: `${i * .7}s` }}>
+          <svg viewBox="0 0 100 100" aria-hidden="true"><path d={STAR} /></svg>
+          <span>{m.name}</span>
+        </a>
+      ))}
+      <div className="sky-caption"><Seal />Four makes, one sky</div>
     </div>
   );
 }
 
-function ConceptWidget() {
-  const [remaining, setRemaining] = useState(getRemaining);
-  const [collapsed, setCollapsed] = useState(() => typeof window !== "undefined" && window.innerWidth < 640);
-  const [showForm, setShowForm] = useState(false);
-  const closeForm = useCallback(() => setShowForm(false), []);
-
-  useEffect(() => {
-    const interval = setInterval(() => setRemaining(getRemaining()), 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <>
-      <aside className={`concept-widget${collapsed ? " is-collapsed" : ""}`} aria-label="Independent website concept preview">
-        <div className="concept-widget-head">
-          <span>CONCEPT REVIEW · NOT FOR OFFICIAL USE</span>
-          <button type="button" onClick={() => setCollapsed((value) => !value)} aria-label={collapsed ? "Expand concept preview" : "Collapse concept preview"} aria-expanded={!collapsed}>
-            {collapsed ? <Plus size={20} /> : <Minus size={20} />}
-          </button>
-        </div>
-        {!collapsed && (
-          <div className="concept-widget-body">
-            <h2>Private Client Preview</h2>
-            <span className="concept-widget-label">PARTNER PROGRAM ELIGIBILITY</span>
-            <p>Reserved for review</p>
-            <div className="concept-widget-timer" aria-label="Time remaining for concept review">
-              {remaining.expired ? <strong>Review window ended</strong> : (
-                [[remaining.days, "Days"], [remaining.hours, "Hours"], [remaining.minutes, "Minutes"]].map(([value, unit]) => (
-                  <span key={unit}><strong>{String(value).padStart(2, "0")}</strong> {unit}</span>
-                ))
-              )}
-            </div>
-            <button type="button" className="concept-widget-cta" onClick={() => setShowForm(true)}>I'm Interested <ArrowUpRight size={18} /></button>
-            <div className="concept-widget-links">
-              {STUDIO_PHONE && <a href={`tel:${STUDIO_PHONE}`}>Call</a>}
-              <a href={`mailto:${STUDIO_EMAIL}`}>Email</a>
-              <a href={STUDIO_WEBSITE} target="_blank" rel="noopener noreferrer">Website</a>
-            </div>
-          </div>
-        )}
-        <div className="concept-widget-footer">
-          <a className="concept-widget-brand" href={STUDIO_WEBSITE} target="_blank" rel="noopener noreferrer" aria-label="Visit Blueprint WebStudio"><span className="studio-logo-mask" style={{ WebkitMaskImage: `url(${blueprintLogo})`, maskImage: `url(${blueprintLogo})` }} aria-hidden="true" /><span>Blueprint WebStudio</span></a>
-          <span>Independent concept</span>
-        </div>
-      </aside>
-      {showForm && <ConceptInterestModal onClose={closeForm} />}
-    </>
-  );
-}
-
 // -----------------------------------------------------------------------------
-// HEADER
+// SECTIONS
 // -----------------------------------------------------------------------------
 
-function BrandMark() {
-  if (SITE.BRAND.logo) return <span className="brand-logo"><img src={SITE.BRAND.logo} alt="" /></span>;
-  const Icon = SITE.BRAND.icon;
-  return <span className="brand-mark" aria-hidden="true"><Icon strokeWidth={2} /></span>;
-}
-
-function Brand({ onClick }) {
+function Header() {
+  const [open, setOpen] = useState(false);
   return (
-    <a className="brand" href="#home" onClick={onClick} aria-label={`${COMPANY} home`}>
-      <BrandMark />
-      <span className={SITE.BRAND.logoOnly ? "brand-text sr-only" : "brand-text"}><strong>{SITE.BRAND.name}</strong><small>{SITE.BRAND.sub}</small></span>
-    </a>
-  );
-}
-
-function navItems() {
-  return [
-    ["#services", "Services"],
-    SITE.FEATURE && [`#${SITE.FEATURE.id}`, SITE.FEATURE.nav],
-    ["#about", SITE.ABOUT.nav || "About"],
-    ["#reviews", "Reviews"],
-    ["#visit", SITE.VISIT.nav || "Visit"],
-  ].filter(Boolean);
-}
-
-function SiteHeader() {
-  const [menu, setMenu] = useState(false);
-  const closeMenu = () => setMenu(false);
-
-  return (
-    <div className="sticky-header">
-      <div className="announce">
-        <div className="container announce-inner">
-          <span>{SITE.ANNOUNCE}</span>
-          <a href={`tel:${PHONE}`}><Phone size={13} /> {PHONE_DISPLAY}</a>
-        </div>
+    <header className="header">
+      <div className="wrap header-inner">
+        <a href="#top" className="brand" aria-label={`${COMPANY} home`}>
+          <Crest size={50} />
+          <span className="brand-word"><strong>Hoshi Motors</strong><small>星 · Boulder, Colorado</small></span>
+        </a>
+        <nav className={`nav ${open ? "open" : ""}`} aria-label="Main">
+          {NAV.map(([label, href]) => <a key={href} href={href} onClick={() => setOpen(false)}>{label}</a>)}
+          <a className="nav-book" href="#book" onClick={() => setOpen(false)}>Book a visit</a>
+        </nav>
+        <a className="header-phone" href={`tel:${PHONE}`}><Phone size={17} />{PHONE_DISPLAY}</a>
+        <a className="btn btn-shu header-cta" href="#book">Book a visit</a>
+        <button className="menu-toggle" type="button" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? <X size={26} /> : <Menu size={26} />}
+        </button>
       </div>
-      <header className="header">
-        <div className="container nav">
-          <Brand onClick={closeMenu} />
-          <nav className={menu ? "links open" : "links"} aria-label="Main navigation">
-            {navItems().map(([href, label]) => <a key={href} href={href} onClick={closeMenu}>{label}</a>)}
-            <a className="links-cta" href="#book" onClick={closeMenu}>{SITE.BOOK.nav}</a>
-          </nav>
-          <a className="nav-cta" href="#book">{SITE.BOOK.nav} <ArrowUpRight size={17} /></a>
-          <button className="mobile-toggle" type="button" aria-label="Toggle navigation" aria-expanded={menu} onClick={() => setMenu((current) => !current)}>
-            {menu ? <X /> : <Menu />}
-          </button>
-        </div>
-      </header>
-    </div>
+    </header>
   );
 }
-
-// -----------------------------------------------------------------------------
-// PAGE SECTIONS
-// -----------------------------------------------------------------------------
 
 function Hero({ rating }) {
-  const { HERO } = SITE;
   return (
-    <section className="hero">
-      {HERO.image && <div className="hero-photo" style={{ backgroundImage: `url(${HERO.image})` }} aria-hidden="true" />}
-      <div className="hero-grid" aria-hidden="true" />
-      <div className="container hero-inner">
+    <section className="hero" id="top">
+      <div className="wrap hero-inner">
         <div className="hero-copy">
-          <span className="eyebrow light">{HERO.eyebrow}</span>
-          <h1><Title parts={HERO.title} /></h1>
-          <p>{HERO.text}</p>
+          <span className="eyebrow">Honda · Acura · Toyota · Subaru</span>
+          <h1>Honest repair for the Japanese cars <em>Boulder drives.</em></h1>
+          <p>We keep Hondas, Acuras, Toyotas and Subarus running for the long haul, and we tell you plainly what your car needs now and what can wait, so you can plan for repairs instead of being surprised by them.</p>
           <div className="hero-actions">
-            <a className="btn primary" href="#book">{HERO.cta} <ArrowUpRight size={19} /></a>
-            <a className="btn ghost" href={`tel:${PHONE}`}><Phone size={18} /> {PHONE_DISPLAY}</a>
+            <a className="btn btn-shu" href="#book">Book a visit <ArrowRight size={18} /></a>
+            <a className="btn btn-ink" href={`tel:${PHONE}`}><Phone size={17} /> {PHONE_DISPLAY}</a>
           </div>
-        </div>
-        <aside className="hero-card" aria-label="At a glance">
-          {rating ? (
-            <a className="hero-rating" href={rating.googleMapsUri || GOOGLE_REVIEWS_URL} target="_blank" rel="noopener noreferrer">
-              <span className="stars" aria-hidden="true">★★★★★</span>
-              <strong>{rating.rating.toFixed(1)}</strong>
-              <span>on Google · {rating.userRatingCount.toLocaleString()} reviews</span>
-            </a>
-          ) : (
-            <div className="hero-rating">
-              <span className="stars" aria-hidden="true">{HERO.badgeKicker}</span>
-              <strong>{HERO.badgeBig}</strong>
-              <span>{HERO.badgeSmall}</span>
-            </div>
-          )}
-          <ul>
-            {HERO.card.map(({ icon: Icon, title, text }) => (
-              <li key={title}><Icon size={18} /><span><b>{title}</b>{text}</span></li>
-            ))}
+          <ul className="hero-facts">
+            <li><Clock size={16} /> Mon–Fri 7:30 am – 5:00 pm</li>
+            <li><MapPin size={16} /> 55th St, between Pearl and Valmont</li>
+            {rating && <li><span className="gold">★ {rating.rating.toFixed(1)}</span> from {rating.userRatingCount.toLocaleString()} Google reviews</li>}
           </ul>
-        </aside>
-      </div>
-      <div className="container stats">
-        {SITE.STATS(rating).map(([value, label]) => <div key={label}><strong>{value}</strong><span>{label}</span></div>)}
+        </div>
+        <Constellation />
       </div>
     </section>
   );
 }
 
-// Awards and affiliations shown on the business's current site (badge image when available).
-function Awards() {
-  if (!SITE.AWARDS?.length) return null;
+function Story() {
   return (
-    <div className="awards-strip" aria-label="Awards and affiliations">
-      <div className="container">
-        {SITE.AWARDS.map(({ title, text, img }) => (
-          <article key={title}>{img ? <img src={img} alt="" loading="lazy" /> : <BadgeCheck size={26} strokeWidth={1.6} />}<span><strong>{title}</strong>{text}</span></article>
-        ))}
+    <section className="story">
+      <Seigaiha id="story-waves" />
+      <div className="wrap story-inner">
+        <div className="story-glyph" aria-hidden="true">星</div>
+        <div>
+          <span className="eyebrow light">Hoshi means star</span>
+          <h2>Long-term relationships, <em>not one-time repairs.</em></h2>
+          <p>Our goal is to build long-term relationships with our customers. That means a straightforward, honest approach: you hear what your car needs, why, and what it costs before we touch it, so you can plan ahead.</p>
+          <p className="story-mail">Even our inbox is a star: <a href={`mailto:${EMAIL}`}>{EMAIL}</a></p>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
 
-function Offers() {
-  if (!SITE.OFFERS?.length) return null;
+function Makes() {
   return (
-    <div className="offer-strip" style={{ "--offer-cols": SITE.OFFERS.length }}>
-      <div className="container">
-        {SITE.OFFERS.map(([title, text]) => <article key={title}><strong>{title}</strong><span>{text}</span></article>)}
+    <section className="section makes" id="makes">
+      <div className="wrap">
+        <div className="head">
+          <span className="eyebrow">The makes we know</span>
+          <h2>Four makes. <em>Known inside out.</em></h2>
+          <p>Focusing on a short list means we know each one's maintenance schedule, its common trouble spots and the fix that lasts.</p>
+        </div>
+        <div className="noren-row">
+          {MAKES.map((m, i) => (
+            <article className="noren" key={m.name}>
+              <div className="noren-cloth">
+                <svg viewBox="0 0 100 100" aria-hidden="true"><path d={STAR} /></svg>
+                <h3>{m.name}</h3>
+                <span className="noren-num">{NUMERALS[i]}</span>
+              </div>
+              <p>{m.line}</p>
+            </article>
+          ))}
+        </div>
       </div>
-    </div>
+    </section>
+  );
+}
+
+function Plan() {
+  return (
+    <section className="section plan" id="plan">
+      <div className="wrap plan-inner">
+        <div className="plan-copy">
+          <span className="eyebrow">Plan ahead</span>
+          <h2>Know what's coming <em>before it breaks.</em></h2>
+          <p>Every inspection ends with a plain estimate sorted by urgency. Nothing gets done without your OK, and you leave knowing what to budget for next.</p>
+          <ol className="steps">
+            <li><b>Request a time.</b> Book online, call or email and we'll confirm a drop-off.</li>
+            <li><b>We inspect and explain.</b> What needs attention now, and what can wait.</li>
+            <li><b>You approve.</b> Work starts only after you say yes to the estimate.</li>
+          </ol>
+        </div>
+        <div className="estimate" aria-label="Example estimate">
+          <div className="estimate-head">
+            <div><small>Example estimate</small><strong>2014 Subaru Outback · 98,400 mi</strong></div>
+            <Seal className="seal-sm">承</Seal>
+          </div>
+          {PLAN.map((p) => (
+            <div className={`estimate-row row-${p.when.toLowerCase()}`} key={p.when}>
+              <span className="estimate-kanji" aria-hidden="true">{p.kanji}</span>
+              <div>
+                <h3>{p.when}</h3>
+                <p>{p.note}</p>
+                <ul>{p.items.map((it) => <li key={it}>{it}</li>)}</ul>
+              </div>
+            </div>
+          ))}
+          <p className="estimate-foot">Sample items for illustration. Your estimate is written for your car.</p>
+        </div>
+      </div>
+    </section>
   );
 }
 
 function Services() {
-  const { SERVICES } = SITE;
   return (
     <section className="section services" id="services">
-      <div className="container">
-        <div className="section-head">
-          <div>
-            <span className="eyebrow">{SERVICES.eyebrow}</span>
-            <h2><Title parts={SERVICES.title} /></h2>
-          </div>
-          <p>{SERVICES.text}</p>
+      <div className="wrap">
+        <div className="head">
+          <span className="eyebrow">What we handle</span>
+          <h2>Everything your car needs, <em>explained plainly.</em></h2>
         </div>
-        <div className="services-grid">
-          {SERVICES.items.map(({ title, desc, icon: Icon }, index) => (
-            <article className="service-card" key={title}>
-              <div className="service-top">
-                <span className="service-icon"><Icon size={24} strokeWidth={1.6} /></span>
-                <span className="service-num">{String(index + 1).padStart(2, "0")}</span>
-              </div>
-              <h3>{title}</h3>
-              <p>{desc}</p>
-              <a href="#book" data-service={title}>{SERVICES.cta} <ArrowRight size={15} /></a>
-            </article>
-          ))}
-        </div>
-        {SERVICES.chips && (
-          <div className="chips-wrap">
-            <div>
-              <h3>{SERVICES.chips.title}</h3>
-              {SERVICES.chips.note && <p>{SERVICES.chips.note}</p>}
-            </div>
-            <div className="chips">{SERVICES.chips.items.map((item) => <span key={item}>{item}</span>)}</div>
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function Feature() {
-  const { FEATURE } = SITE;
-  if (!FEATURE) return null;
-  return (
-    <section className="section feature" id={FEATURE.id}>
-      <div className="container">
-        <div className="section-head">
-          <div>
-            <span className="eyebrow light">{FEATURE.eyebrow}</span>
-            <h2><Title parts={FEATURE.title} /></h2>
-          </div>
-          <p>{FEATURE.text}</p>
-        </div>
-        <div className={`feature-grid${FEATURE.cards.length === 3 ? " cols-3" : ""}`}>
-          {FEATURE.cards.map(({ name, icon: Icon, tone, lead, items }) => (
-            <article className="feature-card" key={name} style={tone ? { "--tone": tone } : undefined}>
-              <span className="feature-icon"><Icon size={26} strokeWidth={1.5} /></span>
-              <h3>{name}</h3>
-              <p>{lead}</p>
-              <ul>
-                {items.map((item) => <li key={item}><CheckCircle2 size={15} /> {item}</li>)}
-              </ul>
-            </article>
+        <div className="service-list">
+          {SERVICES.map(({ title, desc, icon: Icon }, i) => (
+            <a className="service" key={title} href="#book" data-service={title}>
+              <span className="service-num" aria-hidden="true">{NUMERALS[i]}</span>
+              <Icon size={22} className="service-icon" />
+              <span className="service-text"><h3>{title}</h3><p>{desc}</p></span>
+              <ArrowRight size={18} className="service-go" />
+            </a>
           ))}
         </div>
       </div>
@@ -387,129 +269,8 @@ function Feature() {
   );
 }
 
-function Process() {
-  const { PROCESS } = SITE;
-  return (
-    <section className="section process">
-      <div className="container">
-        <div className="section-head">
-          <div>
-            <span className="eyebrow">{PROCESS.eyebrow}</span>
-            <h2><Title parts={PROCESS.title} /></h2>
-          </div>
-          <p>{PROCESS.text}</p>
-        </div>
-        <div className="process-grid">
-          {PROCESS.steps.map(([title, description], index) => (
-            <article key={title}>
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              <h3>{title}</h3>
-              <p>{description}</p>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function About() {
-  const { ABOUT } = SITE;
-  return (
-    <section className="section about" id="about">
-      <div className="container about-inner">
-        <div className="about-media" aria-hidden="true">
-          <div className="about-quads">
-            {ABOUT.tiles.map(({ label, icon: Icon, tone }) => (
-              <span className="about-quad" key={label} style={tone ? { "--tone": tone } : undefined}><Icon size={34} strokeWidth={1.4} /><small>{label}</small></span>
-            ))}
-          </div>
-          <div className="about-badge"><strong>{ABOUT.badge[0]}</strong><span>{ABOUT.badge[1]}</span></div>
-        </div>
-        <div>
-          <span className="eyebrow">{ABOUT.eyebrow}</span>
-          <h2><Title parts={ABOUT.title} /></h2>
-          {ABOUT.text.map((paragraph) => <p className="about-lead" key={paragraph.slice(0, 24)}>{paragraph}</p>)}
-          <div className="credentials">
-            {ABOUT.credentials.map(({ title, desc }) => (
-              <div key={title}>
-                <BadgeCheck size={22} strokeWidth={1.6} />
-                <span><strong>{title}</strong>{desc}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Reviews({ data, rating }) {
-  const reviews = data?.reviews?.filter((review) => review.text?.text || review.originalText?.text) || [];
-  const { REVIEWS } = SITE;
-  return (
-    <section className="section reviews" id="reviews">
-      <div className="container">
-        <div className="section-head">
-          <div>
-            <span className="eyebrow">CUSTOMER REVIEWS</span>
-            <h2>{rating ? <>Rated {rating.rating.toFixed(1)} by <em>{rating.userRatingCount.toLocaleString()} customers.</em></> : <Title parts={REVIEWS.title} />}</h2>
-          </div>
-          <p>{REVIEWS.text}</p>
-        </div>
-        <div className="reviews-summary">
-          <div>
-            <span className="google-wordmark">Google</span>
-            {rating ? (
-              <>
-                <strong>{rating.rating.toFixed(1)} <span className="stars">★★★★★</span></strong>
-                <span>{rating.userRatingCount.toLocaleString()} Google reviews</span>
-              </>
-            ) : (
-              <span>See what customers say about {COMPANY} on Google.</span>
-            )}
-          </div>
-          <div className="reviews-actions">
-            <a className="btn dark" href={rating?.googleMapsUri || GOOGLE_REVIEWS_URL} target="_blank" rel="noopener noreferrer">Read reviews on Google <ArrowUpRight size={17} /></a>
-            {GOOGLE_WRITE_REVIEW_URL && <a className="btn outline" href={GOOGLE_WRITE_REVIEW_URL} target="_blank" rel="noopener noreferrer">Leave a review</a>}
-          </div>
-        </div>
-        {reviews.length > 0 ? (
-          <>
-            <div className="reviews-grid">
-              {reviews.slice(0, 3).map((review, i) => (
-                <article className="review-card" key={`${review.publishTime || i}-${i}`}>
-                  <div className="stars" aria-label={`${review.rating} out of 5 stars`}>{"★".repeat(Math.max(0, Math.min(5, Math.round(review.rating || 0))))}</div>
-                  <p>{review.text?.text || review.originalText?.text}</p>
-                  <footer>
-                    <strong>{review.authorAttribution?.displayName || "Google reviewer"}</strong>
-                    <small>{review.relativePublishTimeDescription}</small>
-                  </footer>
-                </article>
-              ))}
-            </div>
-            <p className="reviews-attribution">Reviews provided by Google. A limited selection is displayed.</p>
-          </>
-        ) : REVIEWS.quotes?.length > 0 && (
-          <>
-            <div className="quotes-grid">
-              {REVIEWS.quotes.map(([text, name]) => (
-                <article className="quote-card" key={name}>
-                  <blockquote>{text}</blockquote>
-                  <footer>{name}<small>{REVIEWS.quoteSource}</small></footer>
-                </article>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function RequestForm() {
-  const { BOOK } = SITE;
-  const blank = Object.fromEntries([...BOOK.fields.flat().map((field) => [field.name, ""]), ["website", ""]]);
+function BookingForm() {
+  const blank = { name: "", phone: "", email: "", vehicle: "", service: "", date: "", notes: "", website: "" };
   const [form, setForm] = useState(blank);
   const [status, setStatus] = useState("idle");
   const [message, setMessage] = useState("");
@@ -523,7 +284,7 @@ function RequestForm() {
     return () => document.removeEventListener("click", pick);
   }, []);
 
-  function update(field, value) { setForm((prev) => ({ ...prev, [field]: value })); }
+  const update = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   async function submit(event) {
     event.preventDefault();
@@ -531,11 +292,7 @@ function RequestForm() {
     setStatus("sending");
     setMessage("");
     try {
-      const response = await fetch("/api/contact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
+      const response = await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.success) throw new Error(result.message || "Something went wrong.");
       setStatus(result.demo ? "demo" : "sent");
@@ -547,102 +304,80 @@ function RequestForm() {
 
   if (status === "sent" || status === "demo") {
     return (
-      <div className="book-form book-done">
+      <div className="form done">
         <CheckCircle2 size={44} />
-        <h3>{status === "demo" ? `This is where ${SITE.BRAND.name} gets your request.` : "Request received."}</h3>
-        <p>
-          {status === "demo"
-            ? `In this concept preview, requests aren't sent anywhere. On the live site they'd land in the ${SITE.NOUN} inbox with everything ${SITE.BRAND.name} needs to call back.`
-            : `Thanks, ${form.name.split(" ")[0]}. We'll be in touch to confirm.`}
-        </p>
-        <button type="button" className="btn dark" onClick={() => setStatus("idle")}>Back to the form</button>
+        <h3>{status === "demo" ? "This is where Hoshi gets your request." : "Request received."}</h3>
+        <p>{status === "demo"
+          ? "In this concept preview, requests aren't sent anywhere. On the live site they'd arrive at star@hoshimotors.net with everything needed to call you back."
+          : `Thanks, ${form.name.split(" ")[0]}. We'll be in touch to confirm your time.`}</p>
+        <button type="button" className="btn btn-ink" onClick={() => setStatus("idle")}>Back to the form</button>
       </div>
     );
   }
 
-  const renderField = (field) => {
-    const common = { value: form[field.name], onChange: (e) => update(field.name, e.target.value), required: field.required };
-    let control;
-    if (field.type === "select") {
-      control = (
-        <select {...common}>
-          <option value="">{field.placeholder || "Choose…"}</option>
-          {field.options.map((option) => <option key={option} value={option}>{option}</option>)}
-        </select>
-      );
-    } else if (field.type === "textarea") {
-      control = <textarea rows={4} maxLength={3000} placeholder={field.placeholder} {...common} />;
-    } else {
-      control = <input type={field.type || "text"} maxLength={field.type === "email" ? 254 : 160} placeholder={field.placeholder} autoComplete={field.autoComplete} {...common} />;
-    }
-    return <label key={field.name}>{field.label}{field.required ? " *" : ""}{control}</label>;
-  };
-
   return (
-    <form className="book-form" onSubmit={submit}>
-      {BOOK.fields.map((row, index) => (Array.isArray(row) ? <div className="book-row" key={index}>{row.map(renderField)}</div> : renderField(row)))}
-      <div className="interest-honeypot" aria-hidden="true"><label>Website<input type="text" tabIndex={-1} autoComplete="off" value={form.website} onChange={(e) => update("website", e.target.value)} /></label></div>
+    <form className="form" onSubmit={submit}>
+      <div className="form-row">
+        <label>Name *<input value={form.name} onChange={update("name")} required maxLength={160} autoComplete="name" /></label>
+        <label>Phone *<input type="tel" value={form.phone} onChange={update("phone")} required maxLength={40} autoComplete="tel" /></label>
+      </div>
+      <div className="form-row">
+        <label>Email<input type="email" value={form.email} onChange={update("email")} maxLength={254} autoComplete="email" /></label>
+        <label>Vehicle<input value={form.vehicle} onChange={update("vehicle")} maxLength={160} placeholder="Year, make, model" /></label>
+      </div>
+      <div className="form-row">
+        <label>Service<select value={form.service} onChange={update("service")}><option value="">Choose a service…</option>{SERVICE_OPTIONS.map((o) => <option key={o}>{o}</option>)}</select></label>
+        <label>Preferred day<input type="date" value={form.date} onChange={update("date")} /></label>
+      </div>
+      <label>What's going on?<textarea rows={4} maxLength={3000} value={form.notes} onChange={update("notes")} placeholder="Symptoms, warning lights, service due…" /></label>
+      <div className="interest-honeypot" aria-hidden="true"><label>Website<input type="text" tabIndex={-1} autoComplete="off" value={form.website} onChange={update("website")} /></label></div>
       {message && <p className="form-error" role="alert">{message}</p>}
-      <button type="submit" className="btn primary full" disabled={status === "sending"}>{status === "sending" ? "Sending…" : BOOK.submit} <ArrowUpRight size={18} /></button>
-      <p className="form-note">{BOOK.note} <a href={`tel:${PHONE}`}>{PHONE_DISPLAY}</a>.</p>
+      <button type="submit" className="btn btn-shu full" disabled={status === "sending"}>{status === "sending" ? "Sending…" : "Request appointment"} <ArrowUpRight size={18} /></button>
+      <p className="form-note">We'll confirm by phone or email. Need it sooner? Call <a href={`tel:${PHONE}`}>{PHONE_DISPLAY}</a>.</p>
     </form>
   );
 }
 
 function Book() {
-  const { BOOK } = SITE;
   return (
     <section className="section book" id="book">
-      <div className="container book-inner">
-        <div>
-          <span className="eyebrow light">{BOOK.eyebrow}</span>
-          <h2><Title parts={BOOK.title} /></h2>
-          <p>{BOOK.text}</p>
-          <ul className="book-points">
-            {BOOK.points.map((point) => <li key={point}><CheckCircle2 size={18} /> {point}</li>)}
-          </ul>
+      <div className="wrap book-inner">
+        <div className="book-copy">
+          <span className="eyebrow">Request an appointment</span>
+          <h2>Tell us about your car. <em>We'll take it from there.</em></h2>
+          <p>Send a request and we'll confirm a drop-off time. You'll get an estimate before any work starts.</p>
+          <div className="book-contact">
+            <a href={`tel:${PHONE}`}><Phone size={18} /> {PHONE_DISPLAY}</a>
+            <a href={`mailto:${EMAIL}`}><Mail size={18} /> {EMAIL}</a>
+          </div>
+          <div className="hours-card">
+            <Seal className="seal-sm">時</Seal>
+            {HOURS.map(([d, h]) => <div key={d}><span>{d}</span><b>{h}</b></div>)}
+          </div>
         </div>
-        <RequestForm />
+        <BookingForm />
       </div>
     </section>
   );
 }
 
-function Visit() {
-  const { VISIT, HOURS } = SITE;
+function Visit({ rating }) {
   const embed = `https://maps.google.com/maps?q=${encodeURIComponent(MAPS_QUERY)}&z=15&output=embed`;
   const directions = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(MAPS_QUERY)}`;
   return (
     <section className="section visit" id="visit">
-      <div className="container visit-inner">
-        <div className="visit-info">
-          <span className="eyebrow">{VISIT.eyebrow}</span>
-          <h2><Title parts={VISIT.title} /></h2>
-          <div className="visit-blocks">
-            {ADDRESS && (
-              <div>
-                <MapPin size={20} />
-                <span><small>ADDRESS</small>{ADDRESS}<br />{CITY}</span>
-              </div>
-            )}
-            <div>
-              <Phone size={20} />
-              <span><small>PHONE</small><a href={`tel:${PHONE}`}>{PHONE_DISPLAY}</a>{EMAIL && <><br /><a href={`mailto:${EMAIL}`}>{EMAIL}</a></>}</span>
-            </div>
-            {HOURS.length > 0 && (
-              <div>
-                <Clock size={20} />
-                <span><small>HOURS</small>
-                  {HOURS.map(([day, hours]) => <span className="hours-row" key={day}><b>{day}</b>{hours}</span>)}
-                </span>
-              </div>
-            )}
+      <div className="wrap visit-inner">
+        <div className="map"><iframe title={`Map to ${COMPANY}`} src={embed} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /></div>
+        <div className="visit-copy">
+          <span className="eyebrow">Visit the shop</span>
+          <h2>55th Street, <em>between Pearl and Valmont.</em></h2>
+          <p className="visit-address"><MapPin size={19} /><span>{ADDRESS}<br />{CITY}</span></p>
+          <div className="visit-actions">
+            <a className="btn btn-ink" href={directions} target="_blank" rel="noopener noreferrer">Get directions <ArrowUpRight size={17} /></a>
+            <a className="btn btn-line" href={rating?.googleMapsUri || GOOGLE_URL} target="_blank" rel="noopener noreferrer">
+              {rating ? `★ ${rating.rating.toFixed(1)} · Google reviews` : "Find us on Google"} <ArrowUpRight size={17} />
+            </a>
           </div>
-          <a className="btn dark" href={directions} target="_blank" rel="noopener noreferrer">Get Directions <ArrowUpRight size={17} /></a>
-          <p className="areas">{VISIT.areas}</p>
-        </div>
-        <div className="visit-map">
-          <iframe title={`Map to ${COMPANY}`} src={embed} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
         </div>
       </div>
     </section>
@@ -652,84 +387,54 @@ function Visit() {
 function Footer() {
   return (
     <footer className="footer">
-      <div className="container footer-main">
-        <div>
-          <Brand />
-          <p>{SITE.FOOTER_BLURB}</p>
-          <div className="footer-social">
-            {SITE.SOCIAL_LINKS.filter(({ url }) => url).map(({ name, url, icon: Icon }) => (
-              <a key={name} href={url} target="_blank" rel="noopener noreferrer" aria-label={name} title={name}><Icon size={16} /></a>
-            ))}
+      <Seigaiha id="foot-waves" />
+      <div className="wrap footer-inner">
+        <div className="footer-brand">
+          <Crest size={64} />
+          <div>
+            <strong>Hoshi Motors</strong>
+            <p>Independent Honda, Acura, Toyota and Subaru repair in Boulder.</p>
           </div>
         </div>
-        <div>
-          <b>Services</b>
-          {SITE.SERVICES.items.slice(0, 5).map(({ title }) => <a key={title} href="#services">{title}</a>)}
-        </div>
-        <div>
-          <b>{SITE.NOUN === "shop" ? "Shop" : "Company"}</b>
-          {navItems().slice(1).map(([href, label]) => <a key={href} href={href}>{label}</a>)}
-          <a href="#book">{SITE.BOOK.nav}</a>
-        </div>
-        <div>
-          <b>Contact</b>
-          <a href={`tel:${PHONE}`}>{PHONE_DISPLAY}</a>
-          {EMAIL && <a href={`mailto:${EMAIL}`}>{EMAIL}</a>}
-          {ADDRESS && <span>{ADDRESS}</span>}
-          {ADDRESS && <span>{CITY}</span>}
-          {SITE.HOURS_SHORT && <span>{SITE.HOURS_SHORT}</span>}
+        <div className="footer-cols">
+          <div><h4>Shop</h4>{NAV.map(([l, h]) => <a key={h} href={h}>{l}</a>)}<a href="#book">Book a visit</a></div>
+          <div><h4>Contact</h4><a href={`tel:${PHONE}`}>{PHONE_DISPLAY}</a><a href={`mailto:${EMAIL}`}>{EMAIL}</a><span>{ADDRESS}</span><span>{CITY}</span></div>
+          <div><h4>Hours</h4>{HOURS.map(([d, h]) => <span key={d}>{d}<br /><b>{h}</b></span>)}</div>
         </div>
       </div>
-      <div className="container footer-bottom">
-        <span>© {new Date().getFullYear()} {COMPANY}. Independent design concept, not an official company website.</span>
-        <a className="footer-studio-brand" href={STUDIO_WEBSITE} target="_blank" rel="noopener noreferrer" aria-label="Website concept by Blueprint WebStudio">
-          <span>Concept redesign by</span>
-          <span className="studio-logo-mask" style={{ WebkitMaskImage: `url(${blueprintLogo})`, maskImage: `url(${blueprintLogo})` }} aria-hidden="true" />
-          <strong>Blueprint WebStudio</strong>
-        </a>
+      <div className="wrap footer-base">
+        <span>© {new Date().getFullYear()} Hoshi Motors. Independent design concept, not an official company website.</span>
+        <StudioCredit />
       </div>
     </footer>
   );
 }
 
-// -----------------------------------------------------------------------------
-// APP — PAGE ORDER
-// -----------------------------------------------------------------------------
-
 export default function App() {
-  const [reviewData, setReviewData] = useState(null);
+  const [rating, setRating] = useState(null);
 
+  // A rating shows only when live Google data is configured (GOOGLE_PLACES_API_KEY + GOOGLE_PLACE_ID).
   useEffect(() => {
     const controller = new AbortController();
     fetch("/api/google-reviews", { signal: controller.signal })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => { if (data) setReviewData(data); })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (typeof d?.rating === "number" && typeof d?.userRatingCount === "number") setRating(d); })
       .catch(() => {});
     return () => controller.abort();
   }, []);
 
-  const live = typeof reviewData?.rating === "number" && typeof reviewData?.userRatingCount === "number";
-  const rating = live
-    ? { rating: reviewData.rating, userRatingCount: reviewData.userRatingCount, googleMapsUri: reviewData.googleMapsUri || null }
-    : FALLBACK_RATING
-      ? { rating: FALLBACK_RATING.rating, userRatingCount: FALLBACK_RATING.userRatingCount, googleMapsUri: null }
-      : null;
-
   return (
     <>
-      <ConceptWidget />
-      <SiteHeader />
-      <main id="home">
+      <ConceptWidget company={COMPANY} abbr={ABBR} endDate={END_DATE} />
+      <Header />
+      <main>
         <Hero rating={rating} />
-        <Awards />
-        <Offers />
+        <Story />
+        <Makes />
+        <Plan />
         <Services />
-        <Feature />
-        <Process />
-        <About />
-        <Reviews data={reviewData} rating={rating} />
         <Book />
-        <Visit />
+        <Visit rating={rating} />
       </main>
       <Footer />
     </>
